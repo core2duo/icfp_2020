@@ -8,7 +8,7 @@ class Atom(object):
 
 class Number(Atom):
     def __init__(self, value):
-        self.name = 'Number<{}>'.format(value)
+        self.name = str(value)
         self.value = int(value)
 
     def eval(self):
@@ -115,7 +115,18 @@ class Cons(Atom):
         if Cons._rec > 5:
             return '...'
         Cons._rec = Cons._rec + 1
-        value = '<{!r} . {!r}>'.format(self.car, self.cdr)
+        if isinstance(self.cdr, Cons):
+            value = '[{!r}'.format(self.car)
+            cdr = self.cdr
+            while isinstance(cdr, Cons):
+                value = value + ' {!r}'.format(cdr.car)
+                cdr = cdr.cdr
+            if isinstance(cdr, Nil):
+                value = value + ']'
+            else:
+                value = value + ' . {!r}'.format(cdr)
+        else:
+            value = '[{!r} . {!r}]'.format(self.car, self.cdr)
         Cons._rec = Cons._rec - 1
         return value
 
