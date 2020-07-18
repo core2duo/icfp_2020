@@ -39,7 +39,7 @@ class Neg(Atom):
         self.value = value
 
     def eval(self):
-        return None
+        return -self.value.eval()
 
     def __repr__(self):
         return '- {!r}'.format(self.value)
@@ -72,7 +72,6 @@ class Parser(object):
         words = reversed(value.strip().split())
         for word in words:
             if word == 'ap':
-                assert len(self.stack) >= 2, 'stack underflow: {!r}'.format(self.stack)
                 fun = self.stack.pop()
                 arg = self.stack.pop()
                 if isinstance(fun, type) and issubclass(fun, Atom):

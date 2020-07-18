@@ -2,3 +2,4 @@
 .vs/
 build/
 Dockerfile
+__pycache__
