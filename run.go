@@ -44,11 +44,16 @@ func (p *Partial) Evaluate(s Stack) Stack {
 	arg := s[len(s)-1]
 	s = s[0 : len(s)-1]
 	p.Args = append(p.Args, arg)
-	if p.Arity() == 0 {
+	if len(p.Args) == p.Fun.Arity() {
 		for i := len(p.Args) - 1; i >= 0; i-- {
-			s = p.Args[i].Evaluate(s)
+			s = append(s, p.Args[i])
+		}
+		if len(s) < p.Fun.Arity() {
+			log.Panicf("cannot evaluate %s with %d arugments: underflow: %#v", p.Name, p.Fun.Arity(), s)
 		}
 		s = p.Fun.Evaluate(s)
+	} else {
+		s = append(s, p)
 	}
 	return s
 }
@@ -99,7 +104,7 @@ func (ap *Ap) Evaluate(s Stack) Stack {
 	if arity == 0 {
 		s = append(s, fun)
 	} else if arity == 1 {
-		s = ap.Arg.Evaluate(s)
+		s = append(s, ap.Arg)
 		s = fun.Evaluate(s)
 	} else {
 		if ap2, ok := ap.Arg.(*Ap); ok {
@@ -112,13 +117,31 @@ func (ap *Ap) Evaluate(s Stack) Stack {
 				Fun:  ap.Arg,
 			})
 		}
-		arg := s[len(s)-1]
-		s = s[0 : len(s)-1]
-		s = append(s, &Partial{
-			Name: fun.GetName(),
-			Fun:  fun,
-			Args: []Atom{arg},
-		})
+		if par, ok := fun.(*Partial); ok {
+			arg := ap.Arg
+			if ap2, ok := ap.Arg.(*Ap); ok {
+				s = ap2.Evaluate(s)
+				arg = s[len(s) - 1]
+				s = s[0 : len(s) - 1]
+			}
+			if arg.Arity() > 0 {
+				s = append(s, &Partial{
+					Name: arg.GetName(),
+					Fun: arg,
+				})
+			} else {
+				s = append(s, arg)
+			}
+			s = par.Evaluate(s)
+		} else {
+			arg := s[len(s)-1]
+			s = s[0 : len(s)-1]
+			s = append(s, &Partial{
+				Name: fun.GetName(),
+				Fun:  fun,
+				Args: []Atom{arg},
+			})
+		}
 	}
 	if flTrace {
 		log.Printf("%s=> %s", indent, s[len(s) - 1].String())
@@ -370,13 +393,13 @@ func (combS *CombS) Evaluate(s Stack) Stack {
 	x := s[len(s)-1]
 	y := s[len(s)-2]
 	z := s[len(s)-3]
-	s = append(s[0:len(s)-3], z)
+	s = append(s[0:len(s)-3], z) // stack: z
 	s = x.Evaluate(s) // stack: xz
 	xz := s[len(s)-1]
 	s = append(s, z) // stack: xz z
 	s = y.Evaluate(s) // stack: xz yz
 	yz := s[len(s)-1]
-	s = append(s[0:len(s)-2], yz) // stack: yz
+	s = append(s[0:len(s)-3], yz) // stack: yz
 	s = xz.Evaluate(s) // stack: xz(yz)
 	return s
 }
@@ -400,11 +423,11 @@ func (combC *CombC) Evaluate(s Stack) Stack {
 	x := s[len(s)-1]
 	y := s[len(s)-2]
 	z := s[len(s)-3]
-	s = append(s[0:len(s)-3], y, z)
-	s = x.Evaluate(s)
+	s = append(s[0:len(s)-4], y, z) // stack: y z
+	s = x.Evaluate(s) // stack: y x(z)
 	xz := s[len(s)-1]
-	s = s[0 : len(s)-1]
-	s = xz.Evaluate(s)
+	s = s[0 : len(s)-1] // stack: y
+	s = xz.Evaluate(s) // stack: x(z)(y)
 	return s
 }
 
@@ -427,7 +450,7 @@ func (combB *CombB) Evaluate(s Stack) Stack {
 	x := s[len(s)-1]
 	y := s[len(s)-2]
 	z := s[len(s)-3]
-	s = append(s[0:len(s)-3], z)
+	s = append(s[0:len(s)-4], z)
 	s = y.Evaluate(s)
 	s = x.Evaluate(s)
 	return s
@@ -479,7 +502,7 @@ func (inc *Inc) GetName() string {
 }
 
 func (inc *Inc) String() string {
-	return "++"
+	return "inc"
 }
 
 func (inc *Inc) Arity() int {
@@ -845,7 +868,13 @@ func load() {
 	s := make(Stack, 0)
 	log.Printf("   %s", show(env["main"]))
 	s = env["main"].Evaluate(s)
-	log.Printf("=> %s", s[0])
+	if len(s) != 1 {
+		log.Printf("expression does not evaluate to a single value")
+		for i := 0; i < len(s); i++ {
+			log.Printf("stack[%d] ->\t%s", i, s[i])
+		}
+	}
+	log.Printf("=> %s", s[len(s) - 1])
 }
 
 func modulate(a Atom) string {
