@@ -142,7 +142,7 @@ func (pair *Pair) Evaluate(s Stack) Stack {
 	return append(s, pair)
 }
 
-type Cons struct {}
+type Cons struct{}
 
 func (cons *Cons) GetName() string {
 	return "cons"
@@ -561,10 +561,10 @@ func (ref *Ref) Arity() int {
 }
 
 func (ref *Ref) Evaluate(s Stack) Stack {
-	return env[ref.Name][0].Evaluate(s)
+	return env[ref.Name].Evaluate(s)
 }
 
-var env map[string][]Atom
+var env map[string]Atom
 
 func parse(lets map[string][]string, v []string) []Atom {
 	s := make(Stack, 0, len(v))
@@ -650,7 +650,7 @@ func load() {
 		log.Panicf("cannot open galaxy.txt: %s", err)
 	}
 
-	env = make(map[string][]Atom)
+	env = make(map[string]Atom)
 	lets := make(map[string][]string)
 
 	scanner := bufio.NewScanner(f)
@@ -669,15 +669,16 @@ func load() {
 	f.Close()
 
 	for k, v := range lets {
-		env[k] = parse(lets, v)
-		if len(env[k]) != 1 {
+		result := parse(lets, v)
+		if len(result) != 1 {
 			panic("bad parse result length")
 		}
+		env[k] = result[0]
 	}
 
 	s := make(Stack, 0)
-	log.Println(show(env["galaxy"][0]))
-	s = env["galaxy"][0].Evaluate(s)
+	log.Println(show(env["galaxy"]))
+	s = env["galaxy"].Evaluate(s)
 	log.Println(s)
 }
 
