@@ -78,7 +78,17 @@ func (ap *Ap) Arity() int {
 	panic("invalid call")
 }
 
+var traceIndent int
+
 func (ap *Ap) Evaluate(s Stack) Stack {
+	if flTrace {
+		traceIndent += 1
+		indent := ""
+		for i := 0; i < traceIndent; i++ {
+			indent = indent + "  "
+		}
+		log.Println(indent + ap.String())
+	}
 	fun := ap.Fun
 	if ap2, ok := fun.(*Ap); ok {
 		s = ap2.Evaluate(s)
@@ -87,7 +97,7 @@ func (ap *Ap) Evaluate(s Stack) Stack {
 	}
 	arity := fun.Arity()
 	if arity == 0 {
-		panic("apply arity 0")
+		s = append(s, fun)
 	} else if arity == 1 {
 		s = ap.Arg.Evaluate(s)
 		s = fun.Evaluate(s)
@@ -109,6 +119,9 @@ func (ap *Ap) Evaluate(s Stack) Stack {
 			Fun:  fun,
 			Args: []Atom{arg},
 		})
+	}
+	if flTrace {
+		traceIndent -= 1
 	}
 	return s
 }
@@ -554,6 +567,12 @@ func (send *Send) Arity() int {
 
 func (send *Send) Evaluate(s Stack) Stack {
 	arg := s[len(s)-1]
+	s = s[0 : len(s)-1]
+	if arg.Arity() > 0 {
+		s = arg.Evaluate(s)
+		arg = s[len(s)-1]
+		s = s[0 : len(s)-1]
+	}
 	data := modulate(arg)
 
 	u, err := url.Parse("https://icfpc2020-api.testkontur.ru/aliens/send")
@@ -577,7 +596,7 @@ func (send *Send) Evaluate(s Stack) Stack {
 	if rest != "" {
 		log.Panicf("cannot sendodulate %q: unexpected trailer: %q", string(body), rest)
 	}
-	return append(s[0:len(s)-1], atom)
+	return append(s, atom)
 }
 
 type IsNil struct{}
@@ -883,8 +902,10 @@ func demodulate(s string) (Atom, string) {
 var initExpr string
 var inputFile string
 var apiKey string
+var flTrace bool
 
 func init() {
+	flag.BoolVar(&flTrace, "trace", false, "Trace applications")
 	flag.StringVar(&initExpr, "expr", "galaxy", "Expression to evaluate")
 	flag.StringVar(&inputFile, "in", "galaxy.txt", "Input file")
 	flag.StringVar(&apiKey, "apikey", "6d65082372354d349977e0f48cd1c95f", "API key")
@@ -892,6 +913,6 @@ func init() {
 }
 
 func main() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	log.SetFlags(log.Lshortfile)
 	load()
 }
