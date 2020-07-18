@@ -2,3 +2,5 @@
 .vs/
 build/
 Dockerfile
+.idea/
+cmake-build-debug/

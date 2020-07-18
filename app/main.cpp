@@ -3,9 +3,16 @@
 #include <string>
 #include "httplib.h"
 
+#include "task.h"
+
 
 int main(int argc, char* argv[])
 {
+  std::string s;
+  std::getline(std::cin, s);
+  eval(s);
+  return 0;
+
 	const std::string serverUrl(argv[1]);
 	const std::string playerKey(argv[2]);
 

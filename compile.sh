@@ -1,0 +1,1 @@
+/Applications/CLion.app/Contents/bin/cmake/mac/bin/cmake --build /Users/core2duo/icfp_2020/cmake-build-debug --target icpf_2020 -- -j 8
