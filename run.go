@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -472,6 +473,67 @@ func (neg *Neg) Evaluate(s Stack) Stack {
 	return append(s[0:len(s)-1], &Number{Value: -num.Value})
 }
 
+type Mod struct{}
+
+func (mod *Mod) GetName() string {
+	return "mod"
+}
+
+func (mod *Mod) String() string {
+	return "mod"
+}
+
+func (mod *Mod) Arity() int {
+	return 1
+}
+
+func (mod *Mod) Evaluate(s Stack) Stack {
+	return append(s[0:len(s)-1], &Linear{Data: modulate(s[len(s)-1])})
+}
+
+type Linear struct {
+	Data string
+}
+
+func (linear *Linear) GetName() string {
+	return "modulated-data"
+}
+
+func (linear *Linear) String() string {
+	return "[" + linear.Data + "]"
+}
+
+func (linear *Linear) Arity() int {
+	return 0
+}
+
+func (linear *Linear) Evaluate(s Stack) Stack {
+	return append(s, linear)
+}
+
+type Dem struct{}
+
+func (dem *Dem) GetName() string {
+	return "dem"
+}
+
+func (dem *Dem) String() string {
+	return "dem"
+}
+
+func (dem *Dem) Arity() int {
+	return 1
+}
+
+func (dem *Dem) Evaluate(s Stack) Stack {
+	arg := s[len(s)-1].(*Linear)
+	atom, rest := demodulate(arg.Data)
+	if rest != "" {
+		log.Fatalf("cannot demodulate %q: unexpected trailer: %q", arg.Data, rest)
+	}
+	return append(s[0:len(s)-1], atom)
+}
+
 type IsNil struct{}
 
 func (isnil *IsNil) GetName() string {
@@ -617,6 +679,10 @@ func parse(lets map[string][]string, v []string) []Atom {
 			s = append(s, &Mul{})
 		case "div":
 			s = append(s, &Div{})
+		case "mod":
+			s = append(s, &Mod{})
+		case "dem":
+			s = append(s, &Dem{})
 		default:
 			_, ok := lets[word]
 			if ok {
@@ -654,9 +720,9 @@ func show(a Atom) string {
 }
 
 func load() {
-	f, err := os.Open("galaxy.txt")
+	f, err := os.Open(inputFile)
 	if err != nil {
-		log.Panicf("cannot open galaxy.txt: %s", err)
+		log.Panicf("cannot open %q: %s", inputFile, err)
 	}
 
 	env = make(map[string]Atom)
@@ -677,6 +743,8 @@ func load() {
 	}
 	f.Close()
 
+	lets["main"] = strings.Fields(initExpr)
+
 	for k, v := range lets {
 		result := parse(lets, v)
 		if len(result) != 1 {
@@ -686,9 +754,88 @@ func load() {
 	}
 
 	s := make(Stack, 0)
-	log.Println(show(env["galaxy"]))
-	s = env["galaxy"].Evaluate(s)
-	log.Println(s)
+	log.Printf("   %s", show(env["main"]))
+	s = env["main"].Evaluate(s)
+	log.Printf("=> %s", s[0])
+}
+
+func modulate(a Atom) string {
+	switch v := a.(type) {
+	case *Number:
+		prefix := "01"
+		val := v.Value
+		if v.Value < 0 {
+			prefix = "10"
+			val = -v.Value
+		}
+		if val == 0 {
+			return prefix + "0"
+		}
+		bstr := fmt.Sprintf("%b", val)
+		for len(bstr)%4 > 0 {
+			bstr = "0" + bstr
+		}
+		for i := 0; i < len(bstr); i += 4 {
+			prefix = prefix + "1"
+		}
+		return prefix + "0" + bstr
+
+	case *Nil:
+		return "00"
+
+	case *Pair:
+		return "11" + modulate(v.Car) + modulate(v.Cdr)
+	}
+
+	log.Fatalf("cannot modulate %T: %#v", a, a)
+	return ""
+}
+
+func demodulate(s string) (Atom, string) {
+	sign := int64(1)
+
+	switch s[0:2] {
+	case "00":
+		return &Nil{}, s[2:]
+
+	case "10":
+		sign = -1
+		fallthrough
+
+	case "01":
+		bits, i := 0, 0
+		for i = 2; i < len(s) && s[i] == '1'; i++ {
+			bits += 4
+		}
+		if i+bits+1 > len(s) || s[i] != '0' {
+			log.Fatalf("unexpected end of string: %q", s)
+		}
+		i += 1
+		v, err := strconv.ParseInt(s[i:i+bits], 2, 64)
+		if err != nil {
+			log.Fatalf("cannot parse %q: %s", s[i:i+bits], err)
+		}
+		return &Number{Value: sign * v}, s[i+bits:]
+
+	case "11":
+		car, rest := demodulate(s[2:])
+		cdr, rest := demodulate(rest)
+		return &Pair{Car: car, Cdr: cdr}, rest
+
+	default:
+		log.Fatalf("bad tag: %q", s[0:2])
+	}
+
+	return nil, ""
+}
+
+var initExpr string
+var inputFile string
+
+func init() {
+	flag.StringVar(&initExpr, "expr", "galaxy", "Expression to evaluate")
+	flag.StringVar(&inputFile, "in", "galaxy.txt", "Input file")
+	flag.Parse()
 }
 
 func main() {
