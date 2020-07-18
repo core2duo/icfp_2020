@@ -12,6 +12,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"testing"
 )
 
 type Atom interface {
@@ -104,7 +105,11 @@ func (ap *Ap) Evaluate(s Stack) Stack {
 	if arity == 0 {
 		s = append(s, fun)
 	} else if arity == 1 {
-		s = append(s, ap.Arg)
+		if ap2, ok := ap.Arg.(*Ap); ok {
+			s = ap2.Evaluate(s)
+		} else {
+			s = append(s, ap.Arg)
+		}
 		s = fun.Evaluate(s)
 	} else {
 		if ap2, ok := ap.Arg.(*Ap); ok {
@@ -435,11 +440,11 @@ type CombB struct {
 }
 
 func (combB *CombB) GetName() string {
-	return "c"
+	return "b"
 }
 
 func (combB *CombB) String() string {
-	return "c"
+	return "b"
 }
 
 func (combB *CombB) Arity() int {
@@ -954,6 +959,47 @@ var initExpr string
 var inputFile string
 var apiKey string
 var flTrace bool
+
+func test(t *testing.T, input, expected string) {
+	env = make(map[string]Atom)
+	expr := parse(map[string][]string{}, strings.Fields(input))
+	if len(expr) != 1 {
+		t.Errorf("unexpected input parse result: %#v", expr)
+	}
+	expr2 := parse(map[string][]string{}, strings.Fields(expected))
+	if len(expr2) != 1 {
+		t.Errorf("unexpected output parse result: %#v", expr2)
+	}
+	s := Stack{}
+	s = expr[0].Evaluate(s)
+	if len(s) != 1 {
+		t.Errorf("unexpected stack: %#v", s)
+	}
+	s1 := Stack{}
+	s1 = expr2[0].Evaluate(s1)
+	if len(s1) != 1 {
+		t.Errorf("unexpected stack: %#v", s1)
+	}
+	if modulate(s[0]) != modulate(s1[0]) {
+		t.Errorf("assertion failed: %#v != %#v", s, s1)
+	}
+}
+
+func testString(t *testing.T, input, expected string) {
+	env = make(map[string]Atom)
+	expr := parse(map[string][]string{}, strings.Fields(input))
+	if len(expr) != 1 {
+		t.Errorf("unexpected input parse result: %#v", expr)
+	}
+	s := Stack{}
+	s = expr[0].Evaluate(s)
+	if len(s) != 1 {
+		t.Errorf("unexpected stack: %#v", s)
+	}
+	if s[0].String() != expected {
+		t.Errorf("assertion failed: %#v != %#v", s[0].String(), expected)
+	}
+}
 
 func main() {
 	flag.BoolVar(&flTrace, "trace", false, "Trace applications")
