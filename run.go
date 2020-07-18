@@ -692,7 +692,7 @@ func load() {
 		log.Fatalf("cannot open file: %s", err)
 	}
 	for k, v := range env {
-		fmt.Fprintf(f, "%s = %s", k, show(v[0]))
+		fmt.Fprintf(f, "%s = %s\n", k, show(v[0]))
 	}
 	f.Close()
 
