@@ -955,15 +955,12 @@ var inputFile string
 var apiKey string
 var flTrace bool
 
-func init() {
+func main() {
 	flag.BoolVar(&flTrace, "trace", false, "Trace applications")
 	flag.StringVar(&initExpr, "expr", "galaxy", "Expression to evaluate")
 	flag.StringVar(&inputFile, "in", "galaxy.txt", "Input file")
 	flag.StringVar(&apiKey, "apikey", "6d65082372354d349977e0f48cd1c95f", "API key")
 	flag.Parse()
-}
-
-func main() {
 	log.SetFlags(log.Lshortfile)
 	load()
 }
