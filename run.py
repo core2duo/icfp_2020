@@ -301,7 +301,7 @@ class B(Atom):
         z = self.z.eval()
 
     def __repr__(self):
-        return '{!r} ({!r} ({(!r}))'.format(self.x, self.y, self.z)
+        return '{!r} ({!r} ({!r}))'.format(self.x, self.y, self.z)
 
 
 class S(Atom):
