@@ -81,9 +81,9 @@ func (ap *Ap) Arity() int {
 var traceIndent int
 
 func (ap *Ap) Evaluate(s Stack) Stack {
+	indent := "\t"
 	if flTrace {
 		traceIndent += 1
-		indent := ""
 		for i := 0; i < traceIndent; i++ {
 			indent = indent + "  "
 		}
@@ -121,6 +121,7 @@ func (ap *Ap) Evaluate(s Stack) Stack {
 		})
 	}
 	if flTrace {
+		log.Printf("%s=> %s", indent, s[len(s) - 1].String())
 		traceIndent -= 1
 	}
 	return s
@@ -370,13 +371,13 @@ func (combS *CombS) Evaluate(s Stack) Stack {
 	y := s[len(s)-2]
 	z := s[len(s)-3]
 	s = append(s[0:len(s)-3], z)
-	s = x.Evaluate(s)
+	s = x.Evaluate(s) // stack: xz
 	xz := s[len(s)-1]
-	s = append(s, z)
-	s = y.Evaluate(s)
+	s = append(s, z) // stack: xz z
+	s = y.Evaluate(s) // stack: xz yz
 	yz := s[len(s)-1]
-	s = append(s[0:len(s)-2], yz)
-	s = xz.Evaluate(s)
+	s = append(s[0:len(s)-2], yz) // stack: yz
+	s = xz.Evaluate(s) // stack: xz(yz)
 	return s
 }
 
@@ -469,6 +470,25 @@ func (num *Number) Arity() int {
 
 func (num *Number) Evaluate(s Stack) Stack {
 	return append(s, num)
+}
+
+type Inc struct{}
+
+func (inc *Inc) GetName() string {
+	return "inc"
+}
+
+func (inc *Inc) String() string {
+	return "++"
+}
+
+func (inc *Inc) Arity() int {
+	return 1
+}
+
+func (inc *Inc) Evaluate(s Stack) Stack {
+	num := s[len(s)-1].(*Number)
+	return append(s[0:len(s)-1], &Number{Value: num.Value + 1})
 }
 
 type Neg struct{}
@@ -716,6 +736,8 @@ func parse(lets map[string][]string, v []string) []Atom {
 			s = append(s, &Cons{})
 		case "neg":
 			s = append(s, &Neg{})
+		case "inc":
+			s = append(s, &Inc{})
 		case "i":
 			s = append(s, &CombI{})
 		case "c":
