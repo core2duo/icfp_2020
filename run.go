@@ -87,7 +87,16 @@ func (ap *Ap) Evaluate(s Stack) Stack {
 		s = ap.Arg.Evaluate(s)
 		s = fun.Evaluate(s)
 	} else {
-		s = ap.Arg.Evaluate(s)
+		if ap2, ok := ap.Arg.(*Ap); ok {
+			s = ap2.Evaluate(s)
+		} else if ap.Arg.Arity() == 0 {
+			s = ap.Arg.Evaluate(s)
+		} else {
+			s = append(s, &Partial{
+				Name: ap.Arg.GetName(),
+				Fun:  ap.Arg,
+			})
+		}
 		arg := s[len(s)-1]
 		s = s[0 : len(s)-1]
 		s = append(s, &Partial{
@@ -557,7 +566,7 @@ func (ref *Ref) String() string {
 }
 
 func (ref *Ref) Arity() int {
-	panic("not implemented")
+	return 1 // FIXME: shouldn't we actually calculate the arity of refs?
 }
 
 func (ref *Ref) Evaluate(s Stack) Stack {
