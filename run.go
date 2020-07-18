@@ -2,9 +2,13 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -529,7 +533,49 @@ func (dem *Dem) Evaluate(s Stack) Stack {
 	arg := s[len(s)-1].(*Linear)
 	atom, rest := demodulate(arg.Data)
 	if rest != "" {
-		log.Fatalf("cannot demodulate %q: unexpected trailer: %q", arg.Data, rest)
+		log.Panicf("cannot demodulate %q: unexpected trailer: %q", arg.Data, rest)
+	}
+	return append(s[0:len(s)-1], atom)
+}
+
+type Send struct{}
+
+func (send *Send) GetName() string {
+	return "send"
+}
+
+func (send *Send) String() string {
+	return "send"
+}
+
+func (send *Send) Arity() int {
+	return 1
+}
+
+func (send *Send) Evaluate(s Stack) Stack {
+	arg := s[len(s)-1]
+	data := modulate(arg)
+
+	u, err := url.Parse("https://icfpc2020-api.testkontur.ru/aliens/send")
+	if err != nil {
+		log.Panicf("cannot parse URL: %s", err)
+	}
+	v := u.Query()
+	v.Add("apiKey", apiKey)
+	u.RawQuery = v.Encode()
+	resp, err := http.Post(u.String(), "text/plain", bytes.NewBuffer([]byte(data)))
+	if err != nil {
+		log.Panicf("cannot POST: %s", err)
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Panicf("cannot read response body: %s", err)
+	}
+	log.Printf("got %q from remote server", string(body))
+	atom, rest := demodulate(strings.TrimSpace(string(body)))
+	if rest != "" {
+		log.Panicf("cannot sendodulate %q: unexpected trailer: %q", string(body), rest)
 	}
 	return append(s[0:len(s)-1], atom)
 }
@@ -683,6 +729,8 @@ func parse(lets map[string][]string, v []string) []Atom {
 			s = append(s, &Mod{})
 		case "dem":
 			s = append(s, &Dem{})
+		case "send":
+			s = append(s, &Send{})
 		default:
 			_, ok := lets[word]
 			if ok {
@@ -787,7 +835,7 @@ func modulate(a Atom) string {
 		return "11" + modulate(v.Car) + modulate(v.Cdr)
 	}
 
-	log.Fatalf("cannot modulate %T: %#v", a, a)
+	log.Panicf("cannot modulate %T: %#v", a, a)
 	return ""
 }
 
@@ -808,12 +856,15 @@ func demodulate(s string) (Atom, string) {
 			bits += 4
 		}
 		if i+bits+1 > len(s) || s[i] != '0' {
-			log.Fatalf("unexpected end of string: %q", s)
+			log.Panicf("unexpected end of string: %q", s)
 		}
 		i += 1
+		if bits == 0 {
+			return &Number{}, s[i:]
+		}
 		v, err := strconv.ParseInt(s[i:i+bits], 2, 64)
 		if err != nil {
-			log.Fatalf("cannot parse %q: %s", s[i:i+bits], err)
+			log.Panicf("cannot parse %q: %s", s[i:i+bits], err)
 		}
 		return &Number{Value: sign * v}, s[i+bits:]
 
@@ -823,7 +874,7 @@ func demodulate(s string) (Atom, string) {
 		return &Pair{Car: car, Cdr: cdr}, rest
 
 	default:
-		log.Fatalf("bad tag: %q", s[0:2])
+		log.Panicf("bad tag: %q", s[0:2])
 	}
 
 	return nil, ""
@@ -831,10 +882,12 @@ func demodulate(s string) (Atom, string) {
 
 var initExpr string
 var inputFile string
+var apiKey string
 
 func init() {
 	flag.StringVar(&initExpr, "expr", "galaxy", "Expression to evaluate")
 	flag.StringVar(&inputFile, "in", "galaxy.txt", "Input file")
+	flag.StringVar(&apiKey, "apikey", "6d65082372354d349977e0f48cd1c95f", "API key")
 	flag.Parse()
 }
 
