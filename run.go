@@ -16,16 +16,6 @@ type Atom interface {
 	String() string
 }
 
-var evalDepth = 0
-func logpfx(delta int) {
-	evalDepth += delta
-	pfx := ""
-	for i := 0; i < evalDepth; i ++ {
-		pfx = pfx + "|___"
-	}
-	log.SetPrefix(pfx)
-}
-
 type Stack []Atom
 
 type Partial struct {
@@ -43,7 +33,6 @@ func (p *Partial) Arity() int {
 }
 
 func (p *Partial) Evaluate(s Stack) Stack {
-	logpfx(1)
 	if len(s) < 1 {
 		log.Panicf("underflow: partial eval: no arg on stack for %s", p.Name)
 	}
@@ -51,15 +40,11 @@ func (p *Partial) Evaluate(s Stack) Stack {
 	s = s[0 : len(s)-1]
 	p.Args = append(p.Args, arg)
 	if p.Arity() == 0 {
-		log.Printf("force %s with %d args", p.Name, len(p.Args))
 		for i := len(p.Args) - 1; i >= 0; i-- {
-			log.Printf("eval arg %d", i)
 			s = p.Args[i].Evaluate(s)
-			log.Printf("arg[%d] -> %#v", i, s[len(s) - 1])
 		}
 		s = p.Fun.Evaluate(s)
 	}
-	logpfx(-1)
 	return s
 }
 
@@ -89,12 +74,11 @@ func (ap *Ap) Arity() int {
 }
 
 func (ap *Ap) Evaluate(s Stack) Stack {
-	logpfx(1)
-	log.Printf("Evaluating %s", ap.Fun.GetName())
 	fun := ap.Fun
 	if ap2, ok := fun.(*Ap); ok {
 		s = ap2.Evaluate(s)
-		fun = s[len(s) - 1]
+		fun = s[len(s)-1]
+		s = s[0 : len(s)-1]
 	}
 	arity := fun.Arity()
 	if arity == 0 {
@@ -104,16 +88,14 @@ func (ap *Ap) Evaluate(s Stack) Stack {
 		s = fun.Evaluate(s)
 	} else {
 		s = ap.Arg.Evaluate(s)
-		arg := s[len(s) - 1]
-		s = s[0 : len(s) - 1]
+		arg := s[len(s)-1]
+		s = s[0 : len(s)-1]
 		s = append(s, &Partial{
 			Name: fun.GetName(),
-			Fun: fun,
+			Fun:  fun,
 			Args: []Atom{arg},
 		})
 	}
-	dumpstack(s)
-	logpfx(-1)
 	return s
 }
 
@@ -123,55 +105,65 @@ func (ap *Ap) Construct(s Stack) Stack {
 	}
 	ap.Fun = s[len(s)-1]
 	ap.Arg = s[len(s)-2]
-	return append(s[0 : len(s)-2], ap)
+	return append(s[0:len(s)-2], ap)
 }
 
 func (ap *Ap) String() string {
 	return fmt.Sprintf("%s(%s)", ap.Fun.String(), ap.Arg.String())
 }
 
-type Cons struct {
+type Pair struct {
 	Car, Cdr Atom
 }
+
+func (pair *Pair) GetName() string {
+	return "pair"
+}
+
+var pairStringCounter = 0
+
+func (pair *Pair) String() string {
+	pairStringCounter += 1
+	var s string
+	if pairStringCounter > 10 {
+		s = "( ... )"
+	} else {
+		s = fmt.Sprintf("(%s . %s)", pair.Car.String(), pair.Cdr.String())
+	}
+	pairStringCounter -= 1
+	return s
+}
+
+func (pair *Pair) Arity() int {
+	return 0
+}
+
+func (pair *Pair) Evaluate(s Stack) Stack {
+	return append(s, pair)
+}
+
+type Cons struct {}
 
 func (cons *Cons) GetName() string {
 	return "cons"
 }
 
-var consStringCounter = 0
 func (cons *Cons) String() string {
-	consStringCounter += 1
-	var s string
-	if consStringCounter > 10 {
-		s = "( ... )"
-	} else {
-		s = fmt.Sprintf("(%s . %s)", cons.Car.String(), cons.Cdr.String())
-	}
-	consStringCounter -= 1
-	return s
+	return "cons"
 }
 
 func (cons *Cons) Arity() int {
 	return 2
 }
 
-func dumpstack(s Stack) {
-	for i := 0; i < len(s); i++ {
-		log.Printf("stack[%d] = %#v", i, s[i])
-	}
-}
-
 func (cons *Cons) Evaluate(s Stack) Stack {
-	logpfx(1)
 	if len(s) < 2 {
 		log.Panicf("underflow: cons eval: %#v", s)
 	}
-	log.Printf("cons eval")
-	dumpstack(s)
-	cons.Car = s[len(s)-1]
-	cons.Cdr = s[len(s)-2]
-	logpfx(-1)
-	return append(s[0 : len(s)-2], cons)
+	pair := &Pair{}
+	pair.Car = s[len(s)-1]
+	pair.Cdr = s[len(s)-2]
+	return append(s[0:len(s)-2], pair)
 }
 
 type Eq struct {
@@ -193,9 +185,9 @@ func (eq *Eq) Evaluate(s Stack) Stack {
 	a := s[len(s)-1].(*Number)
 	b := s[len(s)-2].(*Number)
 	if a.Value == b.Value {
-		s = append(s[0 : len(s)-2], &CombK{})
+		s = append(s[0:len(s)-2], &CombK{})
 	} else {
-		s = append(s[0 : len(s)-2], &CombF{})
+		s = append(s[0:len(s)-2], &CombF{})
 	}
 	return s
 }
@@ -219,9 +211,9 @@ func (lt *Lt) Evaluate(s Stack) Stack {
 	a := s[len(s)-1].(*Number)
 	b := s[len(s)-2].(*Number)
 	if a.Value < b.Value {
-		s = append(s[0 : len(s)-2], &CombK{})
+		s = append(s[0:len(s)-2], &CombK{})
 	} else {
-		s = append(s[0 : len(s)-2], &CombF{})
+		s = append(s[0:len(s)-2], &CombF{})
 	}
 	return s
 }
@@ -244,7 +236,7 @@ func (add *Add) Arity() int {
 func (add *Add) Evaluate(s Stack) Stack {
 	a := s[len(s)-1].(*Number)
 	b := s[len(s)-2].(*Number)
-	return append(s[0 : len(s)-2], &Number{Value: a.Value+b.Value})
+	return append(s[0:len(s)-2], &Number{Value: a.Value + b.Value})
 }
 
 type Div struct {
@@ -265,7 +257,7 @@ func (div *Div) Arity() int {
 func (div *Div) Evaluate(s Stack) Stack {
 	a := s[len(s)-1].(*Number)
 	b := s[len(s)-2].(*Number)
-	return append(s[0 : len(s)-2], &Number{Value: a.Value/b.Value})
+	return append(s[0:len(s)-2], &Number{Value: a.Value / b.Value})
 }
 
 type Mul struct {
@@ -286,7 +278,7 @@ func (mul *Mul) Arity() int {
 func (mul *Mul) Evaluate(s Stack) Stack {
 	a := s[len(s)-1].(*Number)
 	b := s[len(s)-2].(*Number)
-	return append(s[0 : len(s)-2], &Number{Value: a.Value*b.Value})
+	return append(s[0:len(s)-2], &Number{Value: a.Value * b.Value})
 }
 
 type CombK struct {
@@ -307,7 +299,7 @@ func (combK *CombK) Arity() int {
 func (combK *CombK) Evaluate(s Stack) Stack {
 	x := s[len(s)-1]
 	// y := s[len(s)-2]
-	return append(s[0 : len(s)-2], x)
+	return append(s[0:len(s)-2], x)
 }
 
 type CombF struct {
@@ -328,7 +320,7 @@ func (combK *CombF) Arity() int {
 func (combK *CombF) Evaluate(s Stack) Stack {
 	// x := s[len(s)-1]
 	y := s[len(s)-2]
-	return append(s[0 : len(s)-2], y)
+	return append(s[0:len(s)-2], y)
 }
 
 type CombS struct {
@@ -350,13 +342,13 @@ func (combS *CombS) Evaluate(s Stack) Stack {
 	x := s[len(s)-1]
 	y := s[len(s)-2]
 	z := s[len(s)-3]
-	s = append(s[0 : len(s) - 3], z)
+	s = append(s[0:len(s)-3], z)
 	s = x.Evaluate(s)
 	xz := s[len(s)-1]
 	s = append(s, z)
 	s = y.Evaluate(s)
 	yz := s[len(s)-1]
-	s = append(s[0 : len(s) - 2], yz)
+	s = append(s[0:len(s)-2], yz)
 	s = xz.Evaluate(s)
 	return s
 }
@@ -380,10 +372,10 @@ func (combC *CombC) Evaluate(s Stack) Stack {
 	x := s[len(s)-1]
 	y := s[len(s)-2]
 	z := s[len(s)-3]
-	s = append(s[0 : len(s) - 3], y, z)
+	s = append(s[0:len(s)-3], y, z)
 	s = x.Evaluate(s)
 	xz := s[len(s)-1]
-	s = s[0 : len(s) - 1]
+	s = s[0 : len(s)-1]
 	s = xz.Evaluate(s)
 	return s
 }
@@ -407,7 +399,7 @@ func (combB *CombB) Evaluate(s Stack) Stack {
 	x := s[len(s)-1]
 	y := s[len(s)-2]
 	z := s[len(s)-3]
-	s = append(s[0 : len(s) - 3], z)
+	s = append(s[0:len(s)-3], z)
 	s = y.Evaluate(s)
 	s = x.Evaluate(s)
 	return s
@@ -452,7 +444,7 @@ func (num *Number) Evaluate(s Stack) Stack {
 	return append(s, num)
 }
 
-type Neg struct {}
+type Neg struct{}
 
 func (neg *Neg) GetName() string {
 	return "neg"
@@ -468,10 +460,10 @@ func (neg *Neg) Arity() int {
 
 func (neg *Neg) Evaluate(s Stack) Stack {
 	num := s[len(s)-1].(*Number)
-	return append(s[0 : len(s)-1], &Number{Value: -num.Value})
+	return append(s[0:len(s)-1], &Number{Value: -num.Value})
 }
 
-type IsNil struct {}
+type IsNil struct{}
 
 func (isnil *IsNil) GetName() string {
 	return "isnil"
@@ -488,14 +480,14 @@ func (isnil *IsNil) Arity() int {
 func (isnil *IsNil) Evaluate(s Stack) Stack {
 	_, ok := s[len(s)-1].(*Nil)
 	if ok {
-		s = append(s[0 : len(s)-1], &CombK{})
+		s = append(s[0:len(s)-1], &CombK{})
 	} else {
-		s = append(s[0 : len(s)-1], &CombF{})
+		s = append(s[0:len(s)-1], &CombF{})
 	}
 	return s
 }
 
-type Car struct {}
+type Car struct{}
 
 func (car *Car) GetName() string {
 	return "car"
@@ -510,11 +502,11 @@ func (car *Car) Arity() int {
 }
 
 func (car *Car) Evaluate(s Stack) Stack {
-	cons := s[len(s)-1].(*Cons)
-	return append(s[0 : len(s)-1], cons.Car)
+	pair := s[len(s)-1].(*Pair)
+	return append(s[0:len(s)-1], pair.Car)
 }
 
-type Cdr struct {}
+type Cdr struct{}
 
 func (cdr *Cdr) GetName() string {
 	return "cdr"
@@ -529,11 +521,11 @@ func (cdr *Cdr) Arity() int {
 }
 
 func (cdr *Cdr) Evaluate(s Stack) Stack {
-	cons := s[len(s)-1].(*Cons)
-	return append(s[0 : len(s)-1], cons.Cdr)
+	pair := s[len(s)-1].(*Pair)
+	return append(s[0:len(s)-1], pair.Cdr)
 }
 
-type CombI struct {}
+type CombI struct{}
 
 func (neg *CombI) GetName() string {
 	return "i"
@@ -552,7 +544,7 @@ func (neg *CombI) Evaluate(s Stack) Stack {
 }
 
 type Ref struct {
-	Name string
+	Name  string
 	Words []string
 }
 
@@ -569,7 +561,7 @@ func (ref *Ref) Arity() int {
 }
 
 func (ref *Ref) Evaluate(s Stack) Stack {
-	panic("not implemented")
+	return env[ref.Name][0].Evaluate(s)
 }
 
 var env map[string][]Atom
@@ -683,21 +675,9 @@ func load() {
 		}
 	}
 
-	env[":1336"] = parse(lets, lets[":1336"])
-	env[":1029"] = parse(lets, lets[":1029"])
-	env[":1305"] = parse(lets, lets[":1305"])
-
-	f, err = os.OpenFile("galaxy.parsed.txt", os.O_WRONLY | os.O_TRUNC | os.O_CREATE, 0666)
-	if err != nil {
-		log.Fatalf("cannot open file: %s", err)
-	}
-	for k, v := range env {
-		fmt.Fprintf(f, "%s = %s\n", k, show(v[0]))
-	}
-	f.Close()
-
 	s := make(Stack, 0)
-	s = env[":1029"][0].Evaluate(s)
+	log.Println(show(env["galaxy"][0]))
+	s = env["galaxy"][0].Evaluate(s)
 	log.Println(s)
 }
 
