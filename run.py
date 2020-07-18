@@ -226,7 +226,7 @@ class Parser(object):
                 self.stack.append(Number(word))
             else:
                 raise NameError("name '{}' is not defined".format(word))
-        assert len(self.stack) == 1
+        assert len(self.stack) == 1, 'Invalid stack: {!r}'.format(self.stack)
         return self.stack[0]
 
 
@@ -414,10 +414,6 @@ with open('galaxy.txt') as f:
 for ident, atom in env.items():
     if type(atom) is Atom:
         parser = Parser(env)
-        try:
-            code = parser.parse(atom.value)
-        except:
-            print('Error parsing', ident)
-            raise
+        code = parser.parse(atom.value)
         env[ident] = code
-        print('{} = {!r}'.format(ident, code))
+	#print('{} = {!r}'.format(ident, code))
